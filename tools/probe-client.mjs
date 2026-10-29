@@ -164,19 +164,62 @@ assert.doesNotThrow(
 );
 
 // The compaction mark is the one piece both the composer and the settings title
-// draw. It used to reference a path constant that was never declared, which only
-// threw at render time — i.e. as a vanished widget, not a startup error. So this
-// asserts the shape is actually drawn, not which glyph was chosen.
+// draw. It has failed twice, in two different ways, so this checks the properties
+// that actually decide whether the user sees a shape:
+//
+// 1. It referenced a path constant that was never declared → it threw at render
+//    time and the widget simply vanished.
+// 2. Its subpaths used lowercase relative movetos (`m`), which continue from the
+//    previous subpath's endpoint. `... v4.5 m9.5 5.5` lands at (21.5, 12.5) — off
+//    the 24-unit canvas — so the arrowheads were drawn outside the viewBox and
+//    the icon showed as two bare plates. A standalone preview built from the same
+//    numbers looked right, which is why only the geometry check below catches it.
 const markTree = renderProbe(module.FoldBoltIcon, { fill: 0.5 });
 const markJson = JSON.stringify(markTree);
-for (const stroke of ["M7 10h10", "M7 14h10", "M12 2.5v4.5", "M12 21.5V17"]) {
-  assert.ok(markJson.includes(stroke),
-    `the compaction mark must draw its ${stroke} stroke; the icon is a path constant and a typo renders as nothing`);
-}
+// The outline is every subpath joined into one `d`, so pull it back out as a whole.
+const d = module.FoldBoltIcon({ fill: 0.5 })
+  .children.find((child) => child && child.props && typeof child.props.d === "string" && child.props.stroke === "currentColor")
+  ?.props.d;
+assert.ok(typeof d === "string" && d.length > 0,
+  "the mark must render a stroked outline path; a missing path constant renders as nothing");
 assert.ok(markJson.includes("currentColor"),
   "the mark must use currentColor so it inherits the theme's label colour");
 // `fill` is the progress overlay; without it the icon cannot show a partial fold.
 assert.ok(markJson.includes("clipPath"), "the progress fill must clip to the mark's outline");
+
+// Every subpath must start with an ABSOLUTE moveto, and every point must sit
+// inside the viewBox. A relative `m` here is the bug that shipped once.
+const subpaths = d.match(/[Mm][^Mm]*/g) ?? [];
+assert.ok(subpaths.length >= 4, `the mark must be drawn in several subpaths, got ${subpaths.length}`);
+for (const sub of subpaths) {
+  assert.ok(sub.startsWith("M"),
+    `subpath "${sub.trim()}" must start with an absolute M: a relative m continues ` +
+    "from the previous subpath's endpoint and can leave the 24-unit canvas");
+}
+/** Endpoints of one subpath, supporting only the absolute commands this icon uses. */
+function endpointsOf(sub) {
+  const tokens = sub.match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) ?? [];
+  const points = [];
+  let i = 0;
+  while (i < tokens.length) {
+    const command = tokens[i++].toUpperCase();
+    const num = () => Number(tokens[i++]);
+    const last = points[points.length - 1] ?? [0, 0];
+    if (command === "M") points.push([num(), num()]);
+    else if (command === "H") points.push([num(), last[1]]);
+    else if (command === "V") points.push([last[0], num()]);
+    else if (command === "L") points.push([num(), num()]);
+    else break;
+  }
+  return points;
+}
+for (const sub of subpaths) {
+  for (const [x, y] of endpointsOf(sub)) {
+    assert.ok(x >= 0 && x <= 24 && y >= 0 && y <= 24,
+      `point (${x}, ${y}) of "${sub.trim()}" is outside the 24x24 viewBox and would be clipped away`);
+    assert.ok(Number.isFinite(x) && Number.isFinite(y), `subpath "${sub.trim()}" produced a non-finite point`);
+  }
+}
 
 console.log(`OK: bundle registers ${names.length} slots and ${effects.length} effects`);
 console.log(`    ${names.join(", ")}`);

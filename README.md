@@ -1,6 +1,6 @@
 # dsh-compact-manager
 
-上下文压缩中继。一个插件同时提供**独立压缩模型**和**本地机械折页**，合并自
+上下文压缩管理。一个插件同时提供**独立压缩模型**和**本地机械折页**，合并自
 `dsh-compact-saviour` 0.2.8 与 `dsh-ledger-compact` 0.13.4。
 
 ## 为什么要合并
@@ -119,7 +119,7 @@ surface op 形状和相同的稳定性检查。区别只在摘要器：`foldSumm
 
 ## 设置页
 
-`设置 → 压缩中继`，五个 tab：
+`设置 → 压缩管理`，五个 tab：
 
 - **模型** — saviour 开关、压缩方式、救援前失败次数、备用模型 1 与备用模型 2
 - **触发线** — 自动压缩的 80%、headroom、retain，以及算出的实际触发点
@@ -220,7 +220,7 @@ dsh plugin add dsh-compact-manager
 dsh plugin --profile <名称> add link:/path/to/dsh-compact-manager
 ```
 
-装好后在 `设置 → 压缩中继` 配置。插件包裹 live 的
+装好后在 `设置 → 压缩管理` 配置。插件包裹 live 的
 `@deepseek-ai/dsh-compaction-basic` 引擎实例，所以**不要卸载 compaction-basic**——
 官方的事务标记、surface op 和稳定性校验仍然全部来自它。
 

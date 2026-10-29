@@ -308,7 +308,7 @@ function CompactFooter({ state, sending, error, act }) {
         : "已按新模型的上下文容量重新估算。") : null,
     error ? h("div", { className: "dsh-cs-error", role: "alert" }, error) : null,
     state && noModel && engine !== "ledger"
-      ? h("div", { className: "dsh-cs-status" }, "先在设置 → 压缩中继 中选择压缩模型；或直接用「手动非模型压缩」。")
+      ? h("div", { className: "dsh-cs-status" }, "先在设置 → 压缩管理 中选择压缩模型；或直接用「手动非模型压缩」。")
       : null,
     state && !state.available ? h("div", { className: "dsh-cs-status" }, "当前会话的 Compact 后端尚未就绪。") : null,
     job?.phase === "failed" ? h("div", { className: "dsh-cs-actions" },
@@ -637,7 +637,7 @@ function SettingsPanel() {
     return h("div", { className: "dsh-ledger-root" },
       h("div", { className: "dsh-ledger-title" },
         h("span", { className: "dsh-ledger-title-icon", "aria-hidden": "true" }, h(FoldBoltIcon, { fill: 0.4 })),
-        h("h2", null, "压缩中继")),
+        h("h2", null, "压缩管理")),
       h("p", { className: "dsh-ledger-muted" }, message || "正在读取设置…")
     );
   }
@@ -910,7 +910,7 @@ function SettingsPanel() {
   return h("div", { className: "dsh-ledger-root" },
     h("div", { className: "dsh-ledger-title" },
       h("span", { className: "dsh-ledger-title-icon", "aria-hidden": "true" }, h(FoldBoltIcon, { fill: 0.6 })),
-      h("h2", null, "压缩中继"),
+      h("h2", null, "压缩管理"),
       health ? h("span", { className: "dsh-ledger-ver" }, "v" + health.version) : null
     ),
     h("p", { className: "dsh-ledger-muted" }, "独立模型压缩 + 本地机械折页。入境定形在工具结果进模型前定形，折页把旧历史换成短卡，两者都不改写已发送的前缀。"),
@@ -1388,7 +1388,7 @@ class SectionBoundary extends React.Component {
       return h("div", { className: "dsh-ledger-root" },
         h("div", { className: "dsh-ledger-title" },
           h("span", { className: "dsh-ledger-title-icon", "aria-hidden": "true" }, h(FoldBoltIcon, { fill: 0.5 })),
-          h("h2", null, "压缩中继")),
+          h("h2", null, "压缩管理")),
         h("p", { className: "dsh-ledger-muted" }, "这个页面渲染时出错了。下面的信息可以直接交给开发者。"),
         h("div", { className: "dsh-ledger-note", "data-error": true }, String(error?.message ?? error)),
         h("div", { className: "dsh-ledger-note" }, String(error?.stack ?? "")),
@@ -1433,7 +1433,7 @@ function apply(ctx) {
     name: "settings.section",
     id: "compact-manager",
     order: 18,
-    label: () => "压缩中继"
+    label: () => "压缩管理"
   }, () => h(SectionBoundary, null, h(SettingsPanel))));
 }
 

@@ -334,6 +334,30 @@ test("the panel mounts past its loading branch", async () => {
   assert.doesNotMatch(panel.text, /正在读取设置/, "a resolved fetch must leave the loading state");
 });
 
+test("the plugin calls itself 压缩管理 everywhere it names itself", async () => {
+  // The display name is user-facing and must match across the page title and the
+  // messages that point the user at it. It used to be 压缩中继, which described how
+  // it works rather than what it does. The tab *label* is not in this tree — it is
+  // registered on `settings.section` — so this asserts the title and, separately,
+  // that no stale name survives.
+  const panel = await mountLoaded();
+  assert.match(panel.text, /压缩管理/, "the page title must carry the display name");
+  assert.doesNotMatch(panel.text, /压缩中继/, "the old name must not survive anywhere in the UI");
+
+  // The section registration is what the settings sidebar shows.
+  const source = readFileSync(join(here, "..", "tools", "client-app.js"), "utf8");
+  assert.match(source, /label: \(\) => "压缩管理"/,
+    "the settings-section label must use the display name");
+});
+
+test("messages that point at the settings page use the display name", async () => {
+  // A user who reads "先在设置 → X 中选择压缩模型" and cannot find X has been sent to
+  // the wrong place. The Host throws this message too, so both halves are checked.
+  const host = readFileSync(join(here, "..", "lib", "controller.js"), "utf8");
+  assert.match(host, /设置 → 压缩管理/, "the Host's prompt must name the settings section");
+  assert.doesNotMatch(host, /压缩中继/, "the old name must not survive in the Host");
+});
+
 // --- autosave ---------------------------------------------------------------
 //
 // There is no Save button any more, so these tests are the only thing that keeps an

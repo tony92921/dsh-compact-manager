@@ -13,6 +13,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      # The official @deepseek-ai/* packages are peerDependencies, which npm does not
+      # install by itself. Several tests import the real modules (the probe loads
+      # `@deepseek-ai/dsh-llm`, the controller loads `dsh-session`), so without this
+      # step every one of those suites dies on ERR_MODULE_NOT_FOUND — which is what
+      # the first CI runs did.
+      - run: npm install --no-audit --no-fund
       # The vendored primitives are checked in, but the merged bundle is
       # generated; rebuild so a stale lib/client.js cannot pass CI.
       - run: node tools/build-client.mjs
@@ -26,5 +32,6 @@ jobs:
       - run: node tools/probe-client.mjs
       - run: node tools/probe-client-static.mjs
       - run: node tools/probe-static.mjs
-      # probe-host imports the real DSH packages, which CI does not install.
-      - run: node tools/probe-host.mjs || echo "probe-host needs the DSH runtime; skipped"
+      # probe-host drives a fake Host context and imports the real DSH packages, so it
+      # runs now that they are installed.
+      - run: node tools/probe-host.mjs

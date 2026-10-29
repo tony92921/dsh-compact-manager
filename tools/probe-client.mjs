@@ -164,60 +164,60 @@ assert.doesNotThrow(
 );
 
 // The compaction mark is the one piece both the composer and the settings title
-// draw. It has failed twice, in two different ways, so this checks the properties
-// that actually decide whether the user sees a shape:
+// draw, and it is now the official `IconCompactOutline` artwork rather than a
+// hand-drawn glyph. This checks that it stays *that* artwork and keeps the three
+// properties the package sets:
 //
-// 1. It referenced a path constant that was never declared → it threw at render
-//    time and the widget simply vanished.
-// 2. Its subpaths used lowercase relative movetos (`m`), which continue from the
-//    previous subpath's endpoint. `... v4.5 m9.5 5.5` lands at (21.5, 12.5) — off
-//    the 24-unit canvas — so the arrowheads were drawn outside the viewBox and
-//    the icon showed as two bare plates. A standalone preview built from the same
-//    numbers looked right, which is why only the geometry check below catches it.
-const markTree = renderProbe(module.FoldBoltIcon, { fill: 0.5 });
+// - two paths: the 0.35-opacity backing ring and the three-quarter arc
+// - a 16-unit canvas (not 24), drawn with a 1-px stroke
+// - `currentColor`, so it follows the theme's label colour
+//
+// It used to be a custom 24-unit mark whose arrowheads a relative `m` pushed off
+// the canvas; the whole glyph rendered as two bare plates. That cannot recur with
+// fixed path data, but a copy-paste of the wrong path still can, so the geometry
+// check below stays — with the 16-unit bound this icon actually uses.
+const markTree = renderProbe(module.FoldBoltIcon, {});
 const markJson = JSON.stringify(markTree);
-// The outline is every subpath joined into one `d`, so pull it back out as a whole.
-const d = module.FoldBoltIcon({ fill: 0.5 })
-  .children.find((child) => child && child.props && typeof child.props.d === "string" && child.props.stroke === "currentColor")
-  ?.props.d;
-assert.ok(typeof d === "string" && d.length > 0,
-  "the mark must render a stroked outline path; a missing path constant renders as nothing");
+assert.ok(markJson.includes('"viewBox":"0 0 16 16"'),
+  "the mark must use the official 16-unit canvas; a 24-unit box scales this artwork wrong");
 assert.ok(markJson.includes("currentColor"),
   "the mark must use currentColor so it inherits the theme's label colour");
-// `fill` is the progress overlay; without it the icon cannot show a partial fold.
-assert.ok(markJson.includes("clipPath"), "the progress fill must clip to the mark's outline");
 
-// Every subpath must start with an ABSOLUTE moveto, and every point must sit
-// inside the viewBox. A relative `m` here is the bug that shipped once.
-const subpaths = d.match(/[Mm][^Mm]*/g) ?? [];
-assert.ok(subpaths.length >= 4, `the mark must be drawn in several subpaths, got ${subpaths.length}`);
-for (const sub of subpaths) {
-  assert.ok(sub.startsWith("M"),
-    `subpath "${sub.trim()}" must start with an absolute M: a relative m continues ` +
-    "from the previous subpath's endpoint and can leave the 24-unit canvas");
-}
-/** Endpoints of one subpath, supporting only the absolute commands this icon uses. */
-function endpointsOf(sub) {
-  const tokens = sub.match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) ?? [];
+const markPaths = module.FoldBoltIcon({}).children
+  .filter((child) => child && child.props && typeof child.props.d === "string")
+  .map((child) => child.props.d);
+assert.equal(markPaths.length, 2,
+  `the official Compact artwork is two paths (ring + arc), got ${markPaths.length}`);
+assert.ok(markJson.includes('"opacity":0.35'),
+  "the backing ring must keep its 0.35 opacity, or the arc has no faint circle to sit on");
+
+/** Every absolute coordinate pair in one path string. */
+function pointsOf(d) {
+  const tokens = d.match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) ?? [];
   const points = [];
   let i = 0;
   while (i < tokens.length) {
-    const command = tokens[i++].toUpperCase();
-    const num = () => Number(tokens[i++]);
-    const last = points[points.length - 1] ?? [0, 0];
-    if (command === "M") points.push([num(), num()]);
-    else if (command === "H") points.push([num(), last[1]]);
-    else if (command === "V") points.push([last[0], num()]);
-    else if (command === "L") points.push([num(), num()]);
-    else break;
+    const command = tokens[i++];
+    if (/[A-Za-z]/.test(command)) {
+      // Consume that command's coordinate pairs; cubic curves carry three.
+      const arity = command.toUpperCase() === "C" ? 6 : 2;
+      while (i + arity <= tokens.length && !/[A-Za-z]/.test(tokens[i])) {
+        const nums = tokens.slice(i, i + arity).map(Number);
+        for (let k = 0; k < nums.length; k += 2) points.push([nums[k], nums[k + 1]]);
+        i += arity;
+        // Repeated coordinate sets after one command letter are implicit repeats.
+      }
+    }
   }
   return points;
 }
-for (const sub of subpaths) {
-  for (const [x, y] of endpointsOf(sub)) {
-    assert.ok(x >= 0 && x <= 24 && y >= 0 && y <= 24,
-      `point (${x}, ${y}) of "${sub.trim()}" is outside the 24x24 viewBox and would be clipped away`);
-    assert.ok(Number.isFinite(x) && Number.isFinite(y), `subpath "${sub.trim()}" produced a non-finite point`);
+for (const d of markPaths) {
+  assert.ok(d.startsWith("M"), `subpath "${d.slice(0, 24)}…" must start with an absolute M`);
+  for (const [x, y] of pointsOf(d)) {
+    assert.ok(Number.isFinite(x) && Number.isFinite(y),
+      `path "${d.slice(0, 24)}…" produced a non-finite point`);
+    assert.ok(x >= 0 && x <= 16 && y >= 0 && y <= 16,
+      `point (${x}, ${y}) is outside this icon's 16x16 viewBox and would be clipped away`);
   }
 }
 

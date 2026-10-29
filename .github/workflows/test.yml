@@ -19,8 +19,12 @@ jobs:
       - run: git diff --exit-code lib/client.js
       - run: node --check lib/client.js
       - run: node --check lib/index.js
-      - run: node --test test/
+      # A directory argument is not a test target: `node --test test/` tries to load
+      # `test` as a module and fails with MODULE_NOT_FOUND. The glob is what the npm
+      # script uses, so CI and `npm test` run the same set.
+      - run: node --test test/*.test.js
       - run: node tools/probe-client.mjs
+      - run: node tools/probe-client-static.mjs
       - run: node tools/probe-static.mjs
       # probe-host imports the real DSH packages, which CI does not install.
       - run: node tools/probe-host.mjs || echo "probe-host needs the DSH runtime; skipped"

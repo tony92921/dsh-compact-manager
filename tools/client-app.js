@@ -17,8 +17,6 @@
 
 const PACKAGE = "dsh-compact-manager";
 const ENDPOINT = "/api/dsh-compact-manager/v1";
-/** Lightning outline shared by the composer bolt and the settings title. */
-const BOLT_PATH = "M13 2 4 14h7l-1 8 10-12h-7l1-8z";
 /** How long an armed confirmation stays armed before it decays back to idle. */
 const ARM_MS = 4000;
 
@@ -326,15 +324,41 @@ function CompactFooter({ state, sending, error, act }) {
 // Icons
 // ---------------------------------------------------------------------------
 
-/** The bolt outline, filled from the bottom to `fill`. */
+/**
+ * The compaction mark: two arrows pressing inward on a pair of plates.
+ *
+ * It says what the plugin does rather than what it is made of. The previous bolt
+ * was a generic "fast" glyph — it appears on a dozen unrelated plugins and marked
+ * nothing in particular. Two arrows closing on a stack is the one shape that reads
+ * as compaction at 18px: context goes in from above and below, the plates are what
+ * is left.
+ *
+ * Drawn to the same conventions as every other icon in `ICON_PATHS` — 24×24 box,
+ * `currentColor`, 1.6 stroke, round caps and joins — so it inherits the theme's
+ * label colour and sits next to the built-in glyphs without a style seam.
+ *
+ * `fill` keeps the old progress semantics: the mark is filled from the bottom up
+ * over a faint outline, so the same component can show how far a fold has got.
+ */
 function FoldBoltIcon({ fill = 0 }) {
-  const uid = React.useId ? React.useId() : "bolt";
+  const uid = React.useId ? React.useId() : "fold";
   const clipId = "dsh-ledger-clip-" + String(uid).replace(/[^a-zA-Z0-9_-]/g, "");
   const clamped = Math.min(1, Math.max(0, Number(fill) || 0));
+  // Two plates, the incoming arrows, and the arrowheads. Separate paths so the
+  // outline stroke and the clip fill can share them.
+  const strokes = [
+    "M7 10h10",           // upper plate
+    "M7 14h10",           // lower plate
+    "M12 2.5v4.5",        // upper shaft
+    "m9.5 5.5 2.5 2.5 2.5-2.5",   // upper head, pointing down
+    "M12 21.5V17",        // lower shaft
+    "m9.5 18.5 2.5-2.5 2.5 2.5"   // lower head, pointing up
+  ];
+  const outline = strokes.join(" ");
   return h("svg", { viewBox: "0 0 24 24", width: 18, height: 18, "aria-hidden": "true" },
-    h("defs", null, h("clipPath", { id: clipId }, h("path", { d: BOLT_PATH }))),
+    h("defs", null, h("clipPath", { id: clipId }, h("path", { d: outline }))),
     h("path", {
-      d: BOLT_PATH,
+      d: outline,
       fill: "none",
       stroke: "currentColor",
       strokeWidth: 1.6,

@@ -163,12 +163,20 @@ assert.doesNotThrow(
   "CompactFooter must render with a live state"
 );
 
-// The bolt icon is the one piece both the composer and the settings title draw.
-// It used to reference a path constant that was never declared, which only threw
-// at render time — i.e. as a vanished widget, not a startup error.
-const boltTree = renderProbe(module.FoldBoltIcon, { fill: 0.5 });
-assert.ok(JSON.stringify(boltTree).includes("M13 2 4 14h7l-1 8 10-12h-7l1-8z"),
-  "the bolt icon must draw the lightning path");
+// The compaction mark is the one piece both the composer and the settings title
+// draw. It used to reference a path constant that was never declared, which only
+// threw at render time — i.e. as a vanished widget, not a startup error. So this
+// asserts the shape is actually drawn, not which glyph was chosen.
+const markTree = renderProbe(module.FoldBoltIcon, { fill: 0.5 });
+const markJson = JSON.stringify(markTree);
+for (const stroke of ["M7 10h10", "M7 14h10", "M12 2.5v4.5", "M12 21.5V17"]) {
+  assert.ok(markJson.includes(stroke),
+    `the compaction mark must draw its ${stroke} stroke; the icon is a path constant and a typo renders as nothing`);
+}
+assert.ok(markJson.includes("currentColor"),
+  "the mark must use currentColor so it inherits the theme's label colour");
+// `fill` is the progress overlay; without it the icon cannot show a partial fold.
+assert.ok(markJson.includes("clipPath"), "the progress fill must clip to the mark's outline");
 
 console.log(`OK: bundle registers ${names.length} slots and ${effects.length} effects`);
 console.log(`    ${names.join(", ")}`);

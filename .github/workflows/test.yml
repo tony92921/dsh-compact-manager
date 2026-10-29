@@ -1,0 +1,26 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      # The vendored primitives are checked in, but the merged bundle is
+      # generated; rebuild so a stale lib/client.js cannot pass CI.
+      - run: node tools/build-client.mjs
+      - run: git diff --exit-code lib/client.js
+      - run: node --check lib/client.js
+      - run: node --check lib/index.js
+      - run: node --test test/
+      - run: node tools/probe-client.mjs
+      - run: node tools/probe-static.mjs
+      # probe-host imports the real DSH packages, which CI does not install.
+      - run: node tools/probe-host.mjs || echo "probe-host needs the DSH runtime; skipped"

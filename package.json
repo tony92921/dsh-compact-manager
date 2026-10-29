@@ -1,0 +1,81 @@
+{
+  "name": "dsh-compact-manager",
+  "version": "1.0.0",
+  "description": "上下文压缩中继：独立压缩模型 + 本地机械折页，合并自 dsh-compact-saviour 与 dsh-ledger-compact",
+  "license": "MIT",
+  "author": "tony92921",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tony92921/dsh-compact-manager.git"
+  },
+  "homepage": "https://github.com/tony92921/dsh-compact-manager#readme",
+  "bugs": {
+    "url": "https://github.com/tony92921/dsh-compact-manager/issues"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "compaction",
+    "context",
+    "fast-compact",
+    "ingress"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node tools/build-client.mjs",
+    "test": "node --test test/*.test.js",
+    "probe": "node tools/probe-client.mjs && node tools/probe-client-static.mjs && node tools/probe-host.mjs && node tools/probe-static.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/schemastery": "^3.18.4",
+    "@deepseek-ai/dsh-agent": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-compaction": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-commands": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-session": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-token-meter": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-settings": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-scope": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-session-projection": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-connection": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.2.0-rc.1 <0.2.1 || >=0.2.1-rc.1 <0.3.0-0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "files": [
+    "lib",
+    "tools",
+    "cordis.patch.yml",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ]
+}

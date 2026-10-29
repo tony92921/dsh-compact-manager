@@ -1,0 +1,53 @@
+# Third-party notices
+
+This package is a merge of two MIT-licensed plugins and vendored parts of one of
+them. The original copyright notices are reproduced here because their code is
+included, in whole or in part, in the shipped bundle.
+
+## dsh-compact-saviour 0.2.8
+
+Copyright (c) 2026 aa2246740 and contributors
+MIT License — https://github.com/aa2246740/dsh-compact-saviour
+
+Vendored, unmodified, in `lib/client-vendor/saviour-ui.js` (ring control,
+satellite animation, meter bridge, context-ring DOM probes, waiting copy) and
+`lib/client-vendor/saviour.css.js`:
+
+  src/client/context-elements.ts
+  src/client/meter-bridge.ts
+  src/client/ring-control.ts
+  src/client/satellite.ts
+  src/client/name.ts / waiting-copy.tsx
+  src/client/style.css
+
+Adapted into `lib/compact-core.js`, `lib/pressure.js` and `lib/routes.js`:
+
+  src/compress.ts         -> compress()
+  src/controller.ts       -> the rescue()/mechanical() transaction shape
+  src/pressure.ts         -> PressureMeter
+  src/routes.ts           -> CompactionRouteRegistry
+
+## @deepseek-ai/dsh-compaction-basic v0.1.5-rc.2 (commit fb2c4b9e69)
+
+Copyright (c) 2026 DeepSeek
+MIT License — https://github.com/deepseek-ai/deepseek-harness
+
+The transactional region replacement in `lib/compact-core.js`
+(`compactSurfaceRegion` and the helpers it calls) is dsh-compact-saviour's
+adaptation of that package. It is carried through the merge because the merged
+controller must produce the exact same compaction marker triple, surface op and
+stability checks as the official engine — a reimplementation would drift.
+
+## dsh-ledger-compact 0.13.4
+
+Copyright (c) telagod
+MIT License — https://github.com/telagod/dsh-ledger-compact
+
+`lib/ledger/*` is derived from that package: fold card rendering, ingress
+shaping, the dense-PNG rasteriser, the token heuristics and the engine locator.
+
+## Fonts
+
+`lib/ledger/fonts/font8x13.bin` (X.org 8x13) and `lib/ledger/fonts/snapcjk.bin`
+(16x16 CJK) ship with dsh-ledger-compact for the dense-image rasteriser. Their
+upstream licences are recorded in `lib/ledger/fonts/README.md`.

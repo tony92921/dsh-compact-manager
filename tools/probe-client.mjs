@@ -47,16 +47,43 @@ const window = {
     load(definition) {
       registered = definition;
     }
-  }
+  },
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} })
 };
 
+/**
+ * A DOM stub wide enough for `apply()`.
+ *
+ * It used to answer only `querySelector`, `createElement` and `head`, which meant
+ * the nav-glyph effect threw on `document.getElementById` and the probe died
+ * before it could render anything. A probe that cannot get through activation
+ * reports nothing about the components behind it, so the stub now covers every
+ * document member `apply()` touches.
+ */
 const document = {
   querySelector: () => null,
-  createElement: () => ({ dataset: {}, textContent: "" }),
-  head: { appendChild: () => {} }
+  querySelectorAll: () => [],
+  getElementById: () => null,
+  createElement: (tag) => ({ tag, dataset: {}, textContent: "", style: {}, id: "", remove: () => {} }),
+  createElementNS: (_namespace, tag) => ({ tag, dataset: {}, textContent: "", style: {}, setAttribute: () => {}, append: () => {}, appendChild: () => {}, remove: () => {}, querySelector: () => null, querySelectorAll: () => [] }),
+  head: { appendChild: () => {} },
+  body: { children: [], appendChild: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  visibilityState: "visible"
 };
 
-const run = new Function("window", "document", "require", bundle);
+const run = new Function("window", "document", "require", "MutationObserver", "matchMedia", bundle);
+/** Observer stub: `observe`/`disconnect` must exist because effects call them. */
+class MutationObserverStub {
+  constructor(callback) { this.callback = callback; }
+  observe() {}
+  disconnect() {}
+  takeRecords() { return []; }
+}
+const matchMediaStub = () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} });
 run(window, document, (specifier) => {
   if (specifier in stubs) return stubs[specifier];
   try {
@@ -64,7 +91,7 @@ run(window, document, (specifier) => {
   } catch {
     throw new Error(`bundle requires an unavailable module: ${specifier}`);
   }
-});
+}, MutationObserverStub, matchMediaStub);
 
 assert.ok(registered, "bundle did not call window.__ModuleLoader__.load");
 assert.equal(registered.id, "dsh-compact-manager");

@@ -1,15 +1,15 @@
 /**
- * Stylesheet for the merged plugin.
+ * Stylesheet for the plugin.
  *
  * Two independent sheets are combined rather than one being rewritten into the
- * other's prefix. The saviour sheet is scoped under `.dsh-cs-` and is vendored
- * verbatim (the ring/satellite animation depends on exact rules); the ledger sheet
- * is scoped under `.dsh-ledger-` and covers the bolt, the popup footer rows, the
- * settings page and the fold-card preview.
+ * other's prefix. The vendored sheet is scoped under `.dsh-cs-` and is copied
+ * verbatim (the ring/satellite animation depends on exact rules); the sheet below
+ * is scoped under `.dsh-ledger-` and covers the popup footer rows and the
+ * settings page.
  *
  * The prefixes already differ, so nothing had to be renamed — but the ledger half
  * gained a few rules the original did not need: the second popup button, the
- * select/wide input controls the merged page uses, and a tabpane that holds form
+ * select/wide input controls the page uses, and a tabpane that holds form
  * rows instead of a card list.
  */
 
@@ -132,21 +132,5 @@ export const LEDGER_CSS = [
   ".dsh-ledger-last-model-val{color:var(--dsw-alias-label-secondary);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto}",
   ".dsh-ledger-last-model-at{color:var(--dsw-alias-label-caption);font-size:10.5px;flex:none;font-variant-numeric:tabular-nums}",
   ".dsh-ledger-last-model-note{flex-basis:100%;color:var(--dsw-alias-state-warning-primary,#b07d1a);font-size:10.5px;line-height:15px}",
-  ".dsh-ledger-last-model[data-fellback='1']{background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#b07d1a) 10%,transparent)}",
-
-  // --- fold-card preview ----------------------------------------------------
-  ".dsh-ledger-preview{border:.5px solid var(--dsw-alias-border-l2);border-radius:8px;padding:4px 10px 8px;margin:8px 0 2px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-3) 60%,transparent)}",
-  ".dsh-ledger-preview-title{align-items:center;gap:6px;color:var(--dsw-alias-label-caption);font-size:11px;display:flex;padding:4px 0 2px}",
-  ".dsh-ledger-meta{color:var(--dsw-alias-label-caption);font-size:12px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 0}",
-  ".dsh-ledger-rail{position:relative;display:grid;min-width:0}",
-  ".dsh-ledger-rail:before{content:'';position:absolute;left:3px;top:11px;bottom:11px;width:1px;background:color-mix(in srgb,var(--dsw-alias-label-caption) 38%,transparent);pointer-events:none}",
-  ".dsh-ledger-tick{display:grid;grid-template-columns:7px minmax(0,1fr);column-gap:10px;align-items:start;min-width:0}",
-  ".dsh-ledger-dot{width:7px;height:calc(20px + var(--dsh-content-font-delta-secondary,0px));color:var(--dsw-alias-label-caption);place-items:center;position:relative;z-index:1;display:grid}",
-  ".dsh-ledger-tick-body{min-width:0;color:var(--dsw-alias-label-secondary);font-size:var(--dsh-content-font-size-secondary,13px);line-height:calc(20px + var(--dsh-content-font-delta-secondary,0px));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-  ".dsh-ledger-tick[data-kind='files'] .dsh-ledger-tick-body{white-space:normal}",
-  ".dsh-ledger-files{flex-wrap:wrap;gap:0 10px;align-items:baseline;display:flex}",
-  ".dsh-ledger-file{align-items:baseline;gap:4px;min-width:0;display:inline-flex}",
-  ".dsh-ledger-file-path{color:var(--dsw-alias-label-secondary)}",
-  ".dsh-ledger-file-kind{color:var(--dsw-alias-label-caption);flex:none}",
-  ".dsh-ledger-more{color:var(--dsw-alias-label-caption);flex:none}"
+  ".dsh-ledger-last-model[data-fellback='1']{background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#b07d1a) 10%,transparent)}"
 ].join("");

@@ -142,6 +142,14 @@ function makeHelpers() {
           hint,
           { type: "input", props: { defaultValue: options?.fallback, step: options?.step }, children: [] }
         ]
+      }),
+      // The engine row moved onto this pane, so it needs the `row` helper too. It
+      // renders the label and whatever control it is given, which is all the tests
+      // here need in order to find the row by label.
+      row: (icon, label, hint, control) => ({
+        type: "div",
+        props: { "data-row": label, title: hint },
+        children: [label, hint, control]
       })
     }
   };
@@ -161,7 +169,8 @@ function render({ config = CONFIG, preview, saving = false } = {}) {
     loadPreview: () => Promise.resolve(),
     save: () => Promise.resolve(),
     toggle: helpers.toggle,
-    number: helpers.number
+    number: helpers.number,
+    row: helpers.row
   }));
   return { tree, text: textOf(tree), module };
 }

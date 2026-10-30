@@ -10,6 +10,7 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,11 +41,17 @@ const header = `/**
  *
  * The inert pieces the merged plugin reuses verbatim: the rolldown runtime
  * helpers, the native context ring DOM probes, the reversible meter bridge, the
- * ring long-press control with its status animation, and the waiting copy. They
+ * ring status control with its animation, and the waiting copy. They
  * are copied rather than reimplemented because each encodes a specific
  * measurement of this harness DOM, and a rewrite would have to rediscover it.
  *
- * The only edit is mechanical: the module wrapper is gone. \`tools/build-client.mjs\`
+ * One region is deliberately not reused as-is: upstream's ring fired a compaction
+ * on a 650 ms hold, and this plugin drops that gesture. Rather than editing the
+ * extracted text by hand (the next run would overwrite it), this script finishes
+ * by running tools/strip-ring-gesture.mjs, which removes the gesture with
+ * asserted replacements and refuses to run if upstream's text has moved.
+ *
+ * The other edit is mechanical: the module wrapper is gone. tools/build-client.mjs
  * splices this text into the merged factory, which supplies react/react-dom.
  */
 
@@ -73,3 +80,17 @@ export const saviourCss = ${literal};
 
 console.log(`ui: ${take(UI_FROM, UI_TO).split("\n").length} lines`);
 console.log(`css: ${JSON.parse(literal).length} chars`);
+
+/**
+ * Re-apply this plugin's own edit to the freshly extracted chunk.
+ *
+ * Upstream's ring fires a compaction on a 650 ms hold, and this plugin does not
+ * want that gesture. The removal lives in its own script so it can be asserted
+ * piece by piece rather than applied as a line-range cut — an earlier range cut
+ * also deleted the SVG helpers `Satellite` needs, which threw at construction and
+ * left the popup native. Running it here means a re-extraction cannot silently
+ * bring the gesture back.
+ */
+const stripping = spawnSync(process.execPath, [join(here, "strip-ring-gesture.mjs")], { stdio: "inherit" });
+if (stripping.status !== 0) process.exit(stripping.status ?? 1);
+

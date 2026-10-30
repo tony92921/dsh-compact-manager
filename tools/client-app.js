@@ -1,18 +1,17 @@
 /**
- * Merged conversation popup: one anchor, two manual buttons.
+ * Conversation popup footer: one anchor, two manual buttons.
  *
- * The saviour plugin attached a footer to the native context popup and put one
- * "手动压缩" button in it. The ledger plugin attached a separate lightning chip to
- * the composer's left side for its mechanical fold. Keeping two controls for one
- * concern was the main thing the merge was supposed to fix, so this file replaces
- * both with the saviour popup plus a second button directly beneath the first:
+ * The native context popup gets a footer holding both manual paths, so the fold
+ * is not a separate control with its own placement and its own confirmation:
  *
- *   [ 手动压缩 ]        ← model path (existing behaviour, unchanged)
- *   [ 手动非模型压缩 ]   ← local fold: no model, no tokens
+ *   [ 手动模型压缩 ]      ← model path (existing behaviour, unchanged)
+ *   [ 手动机械压缩 ]      ← local fold: no model, no tokens
  *
- * The lighting chip on the left stays (it is the pressure gauge and the
- * long-press shortcut, and it is referenced from the settings preview), but it is
- * registered from here rather than from a second plugin.
+ * The native context ring keeps its pressure meter and its status animation, but
+ * the long-press shortcut is gone: a 650 ms hold used to fire the model path from
+ * a control whose whole job is showing the context breakdown, which is not a
+ * gesture anyone could discover and it bypassed the fold's confirmation step.
+ * The ring now only opens the panel, as it does natively.
  */
 
 const PACKAGE = "dsh-compact-manager";
@@ -154,9 +153,9 @@ function PopupBridge({ sessionId }) {
       meter.apply(ring, latest.current?.context);
       if (control?.button !== ring) {
         control?.destroy();
-        control = ring ? new RingControl(ring, () => { void act.current("configured"); }) : undefined;
+        control = ring ? new RingControl(ring) : undefined;
       }
-      control?.update(posting.current ? "sending" : latest.current?.job.phase ?? "idle", Boolean(latest.current?.available));
+      control?.update(posting.current ? "sending" : latest.current?.job.phase ?? "idle");
       if (owned && owned.parentElement === panel) {
         // The optional breakdown can arrive after the portal footer. React
         // appends its new rows last; keep our action beneath those native rows.
@@ -225,7 +224,7 @@ function CompactFooter({ state, sending, error, act }) {
         ? mechanical
           ? "正在折页"
           : stage === "merge" ? "正在合并摘要" : "正在压缩"
-        : "手动压缩";
+        : "手动模型压缩";
   const progress = !sending && job?.phase === "running" && Number.isInteger(job.completed) && Number.isInteger(job.total)
     && job.total > 1 && job.completed >= 0 && job.completed <= job.total
     ? `${job.completed}/${job.total}`
@@ -245,7 +244,7 @@ function CompactFooter({ state, sending, error, act }) {
   }, [armed]);
   // A new job (or a different session's state) disarms the pending confirmation.
   React.useEffect(() => { setArmed(false); }, [job?.phase]);
-  const foldLabel = armed ? "再点一次确认折页" : busy && mechanical ? "正在折页" : "手动非模型压缩";
+  const foldLabel = armed ? "再点一次确认折页" : busy && mechanical ? "正在折页" : "手动机械压缩";
   const onFold = () => {
     if (sending || active) return;
     if (confirmFold && !armed) {
@@ -272,8 +271,6 @@ function CompactFooter({ state, sending, error, act }) {
       h("span", { className: "dsh-cs-sr-status", role: "status", "aria-live": "polite", "aria-atomic": "true" },
         label + (progress ? ` ${progress}` : ""))
     ),
-    !active && !sending ? h("div", { className: "dsh-cs-hint" }, "也可以长按圆环直接压缩") : null,
-
     // Second manual action: local mechanical fold. It is deliberately available
     // even when no model is configured, because that is exactly the case where a
     // local fold is the only way to shrink history at all.
@@ -306,7 +303,7 @@ function CompactFooter({ state, sending, error, act }) {
         : "已按新模型的上下文容量重新估算。") : null,
     error ? h("div", { className: "dsh-cs-error", role: "alert" }, error) : null,
     state && noModel && engine !== "ledger"
-      ? h("div", { className: "dsh-cs-status" }, "先在设置 → 压缩管理 中选择压缩模型；或直接用「手动非模型压缩」。")
+      ? h("div", { className: "dsh-cs-status" }, "先在设置 → 压缩管理 中选择压缩模型；或直接用「手动机械压缩」。")
       : null,
     state && !state.available ? h("div", { className: "dsh-cs-status" }, "当前会话的 Compact 后端尚未就绪。") : null,
     job?.phase === "failed" ? h("div", { className: "dsh-cs-actions" },
@@ -378,7 +375,9 @@ function FoldBoltIcon() {
  * subsystem keeps both recognisable instead of interleaving thirteen fields.
  */
 function SettingsPanel() {
-  const [tab, setTab] = React.useState("model");
+  // The trigger tab opens first: it is where the engine choice now lives, and that
+  // choice decides which of the other tabs' settings can have any effect.
+  const [tab, setTab] = React.useState("trigger");
   const [state, setState] = React.useState(undefined);
   const [models, setModels] = React.useState([]);
   const [efforts, setEfforts] = React.useState([]);
@@ -451,8 +450,12 @@ function SettingsPanel() {
   // rejects half-configured model pairs, and with no Save button there is no moment
   // where "provider chosen, model not yet" could be a legitimate intermediate state —
   // so the pickers hand over provider + model + reasoning level in one call.
+  //
+  // `enabled` is pinned on here. The page no longer exposes it, so a config stored
+  // while the old switch was off would otherwise keep the plugin out of the
+  // automatic path forever — the engine choice would look applied but stay unread.
   const patch = (next) => {
-    setState((value) => ({ ...value, config: { ...value.config, ...next } }));
+    setState((value) => ({ ...value, config: { ...value.config, enabled: true, ...next } }));
     queueSave();
   };
 
@@ -681,11 +684,19 @@ function SettingsPanel() {
       onChange: (event) => patch({ [key]: event.target.checked })
     }));
 
-  const number = (icon, label, hint, key, options) => h(NumberField, {
-    icon, label, hint, options,
-    value: Number(config[key]) || options.fallback,
-    onCommit: (value) => patch({ [key]: options.scale ? value / options.scale : Math.round(value) })
-  });
+  // `scale` is a unit, not a formatting hint: the config stores a ratio (0.8 for
+  // 80%) while the field takes a percentage, so the write path divides and the
+  // read path must multiply back. Showing the raw ratio is how 60 became 0.6.
+  // `fallback` is already in display units, so it needs no conversion.
+  const number = (icon, label, hint, key, options) => {
+    const raw = Number(config?.[key]);
+    const hasStored = config?.[key] !== null && config?.[key] !== undefined && Number.isFinite(raw);
+    return h(NumberField, {
+      icon, label, hint, options,
+      value: hasStored ? (options.scale ? raw * options.scale : raw) : options.fallback,
+      onCommit: (value) => patch({ [key]: options.scale ? value / options.scale : Math.round(value) })
+    });
+  };
 
   // Probe controls. Both are closures so they can read the live probe state; the
   // result renderer is shared so model 1 and model 2 always present identically.
@@ -734,45 +745,38 @@ function SettingsPanel() {
   };
 
   const modelPane = h("div", { className: "dsh-ledger-tabpane" },
-    // The four combinations of these two controls are not four behaviours: with the
-    // switch off, `mode` is never read, so "official-first" and "direct" do exactly
-    // the same thing. Saying so in three places beats letting the user discover it:
-    // the switch's hint branches on its own value first (it used to describe `mode`
-    // even while off, which made the two rows contradict each other on screen), the
-    // select is disabled while off, and its hint says the choice is inactive.
-    toggle("shield", "启用自动压缩辅助",
-      config?.enabled === false
-        ? "关闭：自动压缩完全由官方摘要器处理，插件不介入。下面两项不生效，但手动压缩仍可用。"
-        : config?.mode === "direct"
-          ? "开启：自动压缩直接交给下方备用模型，官方摘要器不参与。"
-          : `开启：自动压缩先由官方处理，连续失败 ${config?.rescueAfterFailures ?? 2} 次后交给备用模型 1，再失败才切备用模型 2。`,
-      "enabled"),
-    row("replace", "压缩方式",
-      config?.enabled === false
-        ? "辅助已关闭，此项不生效（自动压缩由官方处理）。"
-        : config?.mode === "direct"
-          ? "自动压缩直接用备用模型 1，失败后切备用模型 2。手动压缩按「压缩引擎」执行。"
-          : `自动压缩先由官方处理，连续失败 ${config?.rescueAfterFailures ?? 2} 次后交给备用模型 1，再失败才切备用模型 2。`,
-      h("select", {
-        className: "dsh-ledger-select",
-        value: config?.mode ?? "rescue",
-        // Off means unread, so leaving it clickable would invite the user to "change"
-        // a setting that has no effect.
-        disabled: config?.enabled === false,
-        onChange: (event) => patch({ mode: event.target.value })
-      },
-        h("option", { value: "rescue" }, "官方优先，失败后救援"),
-        h("option", { value: "direct" }, "直接使用备用模型")
-      )),
+    // The engine choice moved to the trigger tab, where it decides whether the
+    // threshold numbers are consulted at all. The old "启用自动压缩辅助" switch is
+    // gone: it defaulted to on and only ever removed the "official summarizer alone"
+    // state, which nothing else on this page could describe. `enabled` is pinned on
+    // by `patch`, so a config stored with it off cannot keep the plugin out of the
+    // automatic path.
+    //
+    // `压缩方式` is the model branch's own choice, so it is not rendered at all while
+    // the engine folds. Greying it out still reserved a row for a decision that
+    // cannot be made — the row is gone, not merely uneditable.
+    engineChoice(config) === "ledger"
+      ? h("p", { className: "dsh-ledger-muted" },
+          "压缩引擎选了「机械」：自动压缩由本地折页接管，下面这些模型设置只在手动模型压缩与 /compact 时才会用到该模型。")
+      : row("replace", "压缩方式",
+          config?.mode === "direct"
+            ? "自动压缩直接用备用模型 1，失败后切备用模型 2，官方摘要器不参与。"
+            : `自动压缩先由官方处理，连续失败 ${config?.rescueAfterFailures ?? 2} 次后交给备用模型 1，再失败才切备用模型 2。`,
+          h("select", {
+            className: "dsh-ledger-select",
+            value: config?.mode ?? "rescue",
+            onChange: (event) => patch({ mode: event.target.value })
+          },
+            h("option", { value: "rescue" }, "官方优先，失败后救援"),
+            h("option", { value: "direct" }, "直接使用备用模型")
+          )),
     // The rescue count belongs to `mode: rescue` only, so it sits directly under the
-    // select that selects it rather than after the unrelated toggle below.
-    config?.enabled !== false && config?.mode !== "direct"
+    // select that chooses it, and disappears with the select it depends on.
+    engineChoice(config) !== "ledger" && config?.mode !== "direct"
       ? number("gauge", "救援前官方失败次数",
           `官方摘要器连续失败到这一次数，才交给备用模型 1。每次失败都是一次完整请求，调到 1 可以少花一次。`,
           "rescueAfterFailures", { min: 1, max: 5, step: 1, suffix: "次", fallback: 2 })
       : null,
-    toggle("replace", "使能非模型压缩",
-      "开启后 /compact、自动压缩、溢出恢复都走机械折页，不再调模型。这是唯一会让自动路径完全不花钱的开关，优先级高于上面两项。", "replaceDefault"),
     row("bolt", "备用模型 1",
       "真正负责压缩的模型。超长历史自动分块，保留近期消息和原始记录。",
       h("select", {
@@ -879,30 +883,15 @@ function SettingsPanel() {
       "必须与 llm-deepseek 的 imagePixelBudget 一致（默认 640000）。画大了会被请求管线缩小，细节就没了。",
       "imagePixelBudget", { min: 200000, max: 4000000, step: 10000, suffix: "px", fallback: 640000 }),
     number("percent", "密图节省", "摘录 + 估图 token ≤ 原文的这个比例，才贴 PNG。", "savingsRatio", { min: 5, max: 100, step: 1, suffix: "%", fallback: 85, scale: 100 }),
+    // The confirm toggle belongs with the mechanical half: it guards the manual fold
+    // button, which is a ledger feature, not a model one. It was on the model tab
+    // only because the fold tab used to hold it.
+    toggle("shield", "折页二次确认", "「手动机械压缩」要再点一次；关掉则单击立即折页。", "confirmFold"),
   );
 
-  const foldPane = h("div", { className: "dsh-ledger-tabpane" },
-    row("replace", "压缩引擎",
-      "手动压缩和 /fast-compact 用哪个引擎。auto：配置了模型就用模型，否则机械折页；ledger：强制机械折页（不调模型）；saviour：交给压缩模型。",
-      h("span", { className: "dsh-ledger-seg", role: "group" },
-        [["auto", "自动"], ["ledger", "机械"], ["saviour", "模型"]].map(([value, text]) => h("button", {
-          key: value,
-          type: "button",
-          className: "dsh-ledger-seg-btn",
-          "data-active": (config?.engine ?? "auto") === value ? "1" : undefined,
-          "aria-pressed": (config?.engine ?? "auto") === value,
-          disabled: (config?.engine ?? "auto") === value,
-          onClick: () => patch({ engine: value })
-        }, text))
-      )),
-    toggle("shield", "折页二次确认", "「手动非模型压缩」要再点一次；关掉则单击立即折页。", "confirmFold"),
-    h("div", { className: "dsh-ledger-preview" },
-      h("div", { className: "dsh-ledger-preview-title" }, h(SettingIcon, { name: "list", size: 12 }), "折页卡示例 · 只留路径/意图/工具/命令/错误/摘录"),
-      h(FoldCardPreview, { card: SAMPLE_CARD })
-    ),
-    h("p", { className: "dsh-ledger-muted" }, "命令：/fast-compact [ledger|saviour|auto] · /fast-compact status"),
-  );
-
+  // The fold tab is gone: everything it held described the same two decisions the
+  // model tab already makes. The confirm toggle moved next to the engine choice it
+  // belongs to, and the command hint moved here.
   const diagPane = h("div", { className: "dsh-ledger-tabpane" },
     h("div", { className: "dsh-ledger-diag-head" },
       h("button", { type: "button", className: "dsh-ledger-btn", disabled: healthBusy, onClick: loadHealth },
@@ -913,16 +902,20 @@ function SettingsPanel() {
     health ? h(DiagGroups, { health }) : h("p", { className: "dsh-ledger-muted" }, "点“刷新”读取 Host 端计数：入境整形、两种压缩策略各自的次数。"),
     health && health.ingress.lastError
       ? h("div", { className: "dsh-ledger-note", "data-error": true }, "最近错误：" + health.ingress.lastError)
-      : null
+      : null,
+    // The fold-card sample used to sit here, left over from the fold tab that was
+    // removed. It was reference material rather than a reading, so it went with
+    // that tab: what remains on this tab is the live counters and the commands.
+    h("p", { className: "dsh-ledger-muted" }, "命令：/fast-compact [ledger|saviour|auto] · /fast-compact status")
   );
 
 
   // ---------------------------------------------------------------------------
-  // 触发线 tab
+  // 自动压缩 tab: which engine runs it, and the numbers that decide when.
   // ---------------------------------------------------------------------------
-  const triggerPane = h(TriggerPane, { config, patch, saving, preview, previewBusy, loadPreview, toggle, number });
+  const triggerPane = h(TriggerPane, { config, patch, saving, preview, previewBusy, loadPreview, toggle, number, row });
 
-  const panes = { model: modelPane, trigger: triggerPane, ingress: ingressPane, fold: foldPane, diag: diagPane };
+  const panes = { model: modelPane, trigger: triggerPane, ingress: ingressPane, diag: diagPane };
 
   return h("div", { className: "dsh-ledger-root" },
     h("div", { className: "dsh-ledger-title" },
@@ -932,10 +925,9 @@ function SettingsPanel() {
     ),
     h("p", { className: "dsh-ledger-muted" }, "独立模型压缩 + 本地机械折页。入境定形在工具结果进模型前定形，折页把旧历史换成短卡，两者都不改写已发送的前缀。"),
     h(TabBar, { tabs: [
+      { id: "trigger", label: "自动压缩", icon: "gauge" },
       { id: "model", label: "模型", icon: "model" },
-      { id: "trigger", label: "触发线", icon: "gauge" },
-      { id: "ingress", label: "入境", icon: "ingress" },
-      { id: "fold", label: "折页", icon: "fold" },
+      { id: "ingress", label: "机械", icon: "ingress" },
       { id: "diag", label: "诊断", icon: "pulse", badge: health && health.ingress.ok === false ? "!" : undefined }
     ], active: tab, onSelect: setTab }),
     panes[tab],
@@ -1006,6 +998,62 @@ function NumberField({ icon, label, hint, value, disabled, options, onCommit }) 
 }
 
 /**
+ * The two-strategy choice, as one control.
+ *
+ * `replaceDefault` and `engine` were separate rows that both answered "fold or
+ * model?" — and `chooseFor` reads `replaceDefault` first, so with it on the engine
+ * buttons were clickable but unread. One control now writes both fields together,
+ * so the stored config cannot say two different things:
+ *
+ *   机械 → replaceDefault: true   engine: "auto"
+ *   模型 → replaceDefault: false  engine: "saviour"
+ *
+ * `auto` stays reachable through the command line (`/fast-compact auto`) and as
+ * the stored default for configs that never touched this row; it is not offered
+ * as a button, because "auto" is a rule about the *other* settings, not a third
+ * strategy. Neither branch depends on `ENGINES` order.
+ */
+const ENGINE_CHOICES = [
+  ["ledger", "机械"],
+  ["saviour", "模型"]
+];
+
+/** Which of the two buttons a config selects. */
+function engineChoice(config) {
+  return config?.replaceDefault === true || config?.engine === "ledger" ? "ledger" : "saviour";
+}
+
+/** The patch for one choice; both fields move together. */
+function enginePatch(choice) {
+  return choice === "ledger"
+    ? { replaceDefault: true, engine: "auto" }
+    : { replaceDefault: false, engine: "saviour" };
+}
+
+function EngineChoice({ config, onPick }) {
+  const active = engineChoice(config);
+  return h("span", { className: "dsh-ledger-seg", role: "group", "aria-label": "压缩引擎" },
+    ENGINE_CHOICES.map(([value, text]) => h("button", {
+      key: value,
+      type: "button",
+      className: "dsh-ledger-seg-btn",
+      "data-active": active === value ? "1" : undefined,
+      "aria-pressed": active === value,
+      disabled: active === value,
+      onClick: () => onPick(enginePatch(value))
+    }, text))
+  );
+}
+
+/** The row this control renders. It is the only place that decides who does the
+ *  automatic compaction; `压缩方式` below only refines the model branch. */
+function engineRow(row, config, patch) {
+  return row("replace", "压缩引擎",
+    "决定自动压缩走哪条路：机械＝本地折页接管，不调模型、不花 token；模型＝由压缩模型参与，具体是「官方优先失败后救援」还是「直接用模型」由下方「压缩方式」决定。它同时决定两个手动按钮与 /compact 的引擎，并会一次写入两处配置，所以不会出现自相矛盾的状态。",
+    h(EngineChoice, { config, onPick: patch }));
+}
+
+/**
  * The automatic-compaction trigger, with the resolved number on screen.
  *
  * Three settings decide when a compaction starts, and none of them is meaningful
@@ -1017,7 +1065,7 @@ function NumberField({ icon, label, hint, value, disabled, options, onCommit }) 
  * The resolved value comes from the Host (`?threshold=1`) rather than from a local
  * copy of the formula, so what the page promises is what the engine enforces.
  */
-function TriggerPane({ config, patch, saving, preview, previewBusy, loadPreview, toggle, number }) {
+function TriggerPane({ config, patch, saving, preview, previewBusy, loadPreview, toggle, number, row }) {
   const spec = preview?.spec;
   const known = spec?.known === true;
   const cappedByHeadroom = spec?.cappedBy === "headroom";
@@ -1031,7 +1079,12 @@ function TriggerPane({ config, patch, saving, preview, previewBusy, loadPreview,
 
   return h("div", { className: "dsh-ledger-tabpane" },
     h("p", { className: "dsh-ledger-muted" },
-      "这三项决定自动压缩什么时候发生。改动即时生效并自动保存，下面的结果同步重算。"),
+      "引擎决定由谁压缩，下面的数值决定什么时候压缩。改动即时生效并自动保存，下面的结果同步重算。"),
+
+    // The engine choice leads this tab: it decides whether the threshold numbers
+    // below are even consulted (the mechanical fold schedules itself), so putting it
+    // after them would state the numbers first and their precondition second.
+    engineRow(row, config, patch),
 
     toggle("pulse", "接管自动压缩阈值", 
       "开启：用本页的数值判断何时压缩（默认值与官方一致，所以不改也不会变）。关闭：完全沿用 compaction-basic 自带配置。",
@@ -1211,12 +1264,12 @@ function DiagGroups({ health }) {
         h(DiagCell, {
           label: "手动折页",
           value: String(mechanical.manual ?? 0),
-          title: "你点「手动非模型压缩」的次数，或 /fast-compact ledger。把旧历史换成短卡。"
+          title: "你点「手动机械压缩」的次数，或 /fast-compact ledger。把旧历史换成短卡。"
         }),
         h(DiagCell, {
           label: "接管折页",
           value: String(mechanical.replaced ?? 0),
-          title: "「使能非模型压缩」开关生效、把本该调模型的自动路径改成折页的次数。大于 0 说明该开关在工作。"
+          title: "「压缩引擎」选「机械」时，本该调模型的自动路径被改成折页的次数。大于 0 说明该设置在起作用。"
         }),
         h(DiagCell, {
           label: "钩住引擎",
@@ -1299,64 +1352,12 @@ function formatMs(value) {
   return minutes + " 分 " + seconds + " 秒";
 }
 
-/** A frozen fold card, so the fold tab shows the shape before anything is folded. */
-const SAMPLE_CARD = {
-  items: 128,
-  tokens: 42350,
-  edits: ["lib/client.js"],
-  reads: ["lib/ingress.js", "lib/fold.js"],
-  intents: ["把两个压缩插件合成一个", "输入栏加非模型压缩按钮"],
-  tools: [{ name: "read", n: 12 }, { name: "edit", n: 6 }],
-  commands: ["node --test lib/ledger.test.js -> 0"],
-  errors: [],
-  excerpt: ["[user] 合并 saviour 和 ledger", "[tool] read lib/controller.js"]
-};
-
-function FoldCardPreview({ card }) {
-  const files = [...(card.edits ?? []).map((path) => ({ path, kind: "改" })), ...(card.reads ?? []).map((path) => ({ path, kind: "读" }))];
-  const meta = [`${card.items} 条`, `${formatTokens(card.tokens)} tok`];
-  if (card.edits?.length) meta.push(`${card.edits.length} 改`);
-  if (card.reads?.length) meta.push(`${card.reads.length} 读`);
-  const lines = [];
-  for (const intent of (card.intents ?? []).slice(0, 2)) lines.push(h(Tick, { key: "i" + intent, text: intent }));
-  if (files.length) {
-    lines.push(h(Tick, {
-      key: "files",
-      text: null,
-      children: h("span", { className: "dsh-ledger-files" }, files.slice(0, 6).map((file, index) =>
-        h("span", { className: "dsh-ledger-file", key: index, title: file.path },
-          h("span", { className: "dsh-ledger-file-path" }, shortPath(file.path)),
-          h("span", { className: "dsh-ledger-file-kind" }, file.kind))), files.length > 6 ? h("span", { className: "dsh-ledger-more" }, `+${files.length - 6}`) : null)
-    }));
-  }
-  for (const command of (card.commands ?? []).slice(0, 2)) {
-    lines.push(h(Tick, { key: "c" + command, text: command }));
-  }
-  return h(React.Fragment, null,
-    h("div", { className: "dsh-ledger-meta" }, meta.join(" · ")),
-    h("div", { className: "dsh-ledger-rail" }, lines)
-  );
-}
-
-function Tick({ text, children, title }) {
-  return h("div", { className: "dsh-ledger-tick", "data-kind": children ? "files" : "intent", title: title || (text ?? undefined) },
-    h("span", { className: "dsh-ledger-dot", "aria-hidden": "true" }, h("svg", { viewBox: "0 0 8 8", width: 7, height: 7 },
-      h("circle", { cx: 4, cy: 4, r: 2.25, fill: "currentColor" }))),
-    h("div", { className: "dsh-ledger-tick-body" }, children ?? text)
-  );
-}
-
-function shortPath(path) {
-  const parts = String(path || "").split(/[/\\]/).filter(Boolean);
-  return parts[parts.length - 1] || path;
-}
 
 const ICON_PATHS = {
   ingress: ["M12 3v9", "m8 8 4 4 4-4", "M5 16v2a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-2"],
   image: ["M4 5h16v14H4z", "m5 16 4-5 3 4 2-2 4 3"],
   gauge: ["M5 17a8 8 0 1 1 14 0", "m12 17 4-5"],
   percent: ["M7 7h.01M17 17h.01", "M17 7 7 17"],
-  fold: ["M5 4h9l5 5v11H5z", "M14 4v5h5"],
   replace: ["M4 8h12l-3-3", "M20 16H8l3 3"],
   shield: ["M12 4l7 3v5c0 4-3 6.5-7 8-4-1.5-7-4-7-8V7z", "m9 12 2 2 4-4"],
   pulse: ["M3 12h4l2-5 3 10 2-5h7"],
@@ -1417,6 +1418,90 @@ class SectionBoundary extends React.Component {
 }
 
 // ---------------------------------------------------------------------------
+// Settings nav glyph
+// ---------------------------------------------------------------------------
+
+/**
+ * Why this exists: the settings nav paints its glyph from a fixed table keyed by
+ * section id — `navIcon()` in `@deepseek-ai/dsh-client-ui-settings-general` knows
+ * account / models / agent-presets / plugins / archived-sessions, and every other
+ * id falls back to the settings gear. A slot registration cannot supply its own:
+ * the entry carries an `icon` field, but `navIcon(row.id)` never reads it, so
+ * passing one changes nothing.
+ *
+ * So the row is decorated after the fact, the technique dsh-skills-manager uses
+ * for the same problem: match the nav button whose label is ours, mark it, and
+ * let one owned stylesheet hide the host `svg` and paint the official compact
+ * mark as a masked `::before`. Matching on the label (not on position) means the
+ * decoration survives reordering and does not touch the other rows. Every marker
+ * and the stylesheet are removed again when this fiber unloads, so disabling the
+ * plugin restores the host gear exactly.
+ */
+
+/** Marker attribute; its presence is what the stylesheet keys on. */
+const NAV_ATTR = "data-dcm-nav-icon";
+/** The nav row's own label, used to find our button. */
+const NAV_LABEL = "压缩管理";
+/** Rows live inside the settings dialog's nav; nothing else is decorated. */
+const NAV_BUTTONS = '[role="dialog"] nav button';
+
+/**
+ * The same `IconCompactOutline` artwork `FoldBoltIcon` renders, flattened into a
+ * mask source: a faint full ring plus a three-quarter arc. As a mask the colour
+ * must be opaque black while the stroke stays a stroke, so it cannot reuse the
+ * component's element tree directly.
+ */
+const NAV_ART = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\"" +
+  " fill=\"none\" stroke=\"#000\" stroke-width=\"1\"" +
+  " stroke-linecap=\"round\" stroke-linejoin=\"round\">" +
+  "<path opacity=\"0.35\" d=\"M8 14.5C11.5899 14.5 14.5 11.5899 14.5 8C14.5 4.41015 11.5899 1.5 8 1.5C4.41015 1.5 1.5 4.41015 1.5 8C1.5 11.5899 4.41015 14.5 8 14.5Z\"/>" +
+  "<path d=\"M8 1.5C8.85359 1.5 9.69883 1.66813 10.4874 1.99478C11.2761 2.32144 11.9926 2.80022 12.5962 3.40381C13.1998 4.00739 13.6786 4.72394 14.0052 5.51256C14.3319 6.30117 14.5 7.14641 14.5 8\"/>" +
+  "</svg>";
+
+const NAV_MASK = 'url("data:image/svg+xml,' + encodeURIComponent(NAV_ART) + '")';
+const NAV_STYLE_ID = PACKAGE + "/nav-icon.css";
+
+/**
+ * `currentColor` + a mask, not a background image: the glyph then follows the
+ * nav row's own colour through hover and the active state without this plugin
+ * knowing any theme token.
+ */
+const NAV_CSS = [
+  "[" + NAV_ATTR + "] > svg { display: none !important; }",
+  "[" + NAV_ATTR + "]::before {",
+  "  content: '';",
+  "  flex: none;",
+  "  width: 16px;",
+  "  height: 16px;",
+  "  background-color: currentColor;",
+  "  -webkit-mask: " + NAV_MASK + " center / 16px 16px no-repeat;",
+  "  mask: " + NAV_MASK + " center / 16px 16px no-repeat;",
+  "}"
+].join("\n");
+
+/** True when this button is the settings row we own. */
+function isOwnNavRow(button) {
+  return String(button.textContent ?? "").trim() === NAV_LABEL;
+}
+
+/**
+ * Mark or unmark one nav button.
+ * @returns whether the DOM actually changed, so the paint loop can stay quiet.
+ */
+function decorateNav(button) {
+  if (isOwnNavRow(button)) {
+    if (button.getAttribute(NAV_ATTR) === "") return false;
+    button.setAttribute(NAV_ATTR, "");
+    return true;
+  }
+  if (button.hasAttribute(NAV_ATTR)) {
+    button.removeAttribute(NAV_ATTR);
+    return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -1438,6 +1523,44 @@ function apply(ctx) {
     tag.textContent = CSS;
     return () => { tag.remove(); };
   }, PACKAGE + ": css");
+
+  // The settings nav glyph: marked up by label, painted by one owned stylesheet.
+  // A MutationObserver covers the panel opening, closing and re-rendering; the
+  // microtask debounce keeps a single pass per frame instead of one per mutation.
+  ctx.effect(() => {
+    if (typeof document === "undefined") return;
+    let style = document.getElementById(NAV_STYLE_ID);
+    if (style === null) {
+      style = document.createElement("style");
+      style.id = NAV_STYLE_ID;
+      document.head.appendChild(style);
+    }
+    style.textContent = NAV_CSS;
+
+    let stopped = false;
+    let queued = false;
+    const paint = () => {
+      queued = false;
+      if (stopped) return;
+      for (const button of document.querySelectorAll(NAV_BUTTONS)) decorateNav(button);
+    };
+    const schedule = () => {
+      if (queued || stopped) return;
+      queued = true;
+      queueMicrotask(paint);
+    };
+
+    paint();
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    return () => {
+      stopped = true;
+      observer.disconnect();
+      const tag = document.getElementById(NAV_STYLE_ID);
+      if (tag !== null) tag.remove();
+      for (const marked of document.querySelectorAll("[" + NAV_ATTR + "]")) marked.removeAttribute(NAV_ATTR);
+    };
+  }, PACKAGE + ": settings nav glyph");
 
   ctx.slots.inject("conversation.input.right", () => ctx.slots.register({
     name: "conversation.input.right",

@@ -166,8 +166,8 @@ test("the footer renders exactly the two manual buttons", () => {
   const footer = mountFooter({ module, harness });
   assert.equal(footer.buttons.length, 2, "one model button and one mechanical button");
   const labels = footer.buttons.map((button) => textOf(button));
-  assert.ok(labels[0].includes("手动压缩"), `first button: ${labels[0]}`);
-  assert.ok(labels[1].includes("手动非模型压缩"), `second button: ${labels[1]}`);
+  assert.ok(labels[0].includes("手动模型压缩"), `first button: ${labels[0]}`);
+  assert.ok(labels[1].includes("手动机械压缩"), `second button: ${labels[1]}`);
 });
 
 test("each button posts its own action", () => {
@@ -194,6 +194,25 @@ test("confirmFold turns the second button into a two-click action", () => {
 
   footer.click(1);
   assert.deepEqual(footer.posted, ["mechanical"], "the second click commits");
+});
+
+test("the footer no longer advertises a long press", () => {
+  // The ring's 650 ms hold was removed, so a hint that still promises it would be
+  // a lie a user can only expose by trying it. The footer is the only place the
+  // two starting points are explained, so its text must not mention a gesture.
+  const { module, harness } = loadModule();
+  const footer = mountFooter({ module, harness });
+  assert.doesNotMatch(footer.text, /长按/, `footer text: ${footer.text}`);
+  assert.doesNotMatch(footer.text, /圆环/, `footer text: ${footer.text}`);
+});
+
+test("the bundle carries no hold-to-compact wiring", () => {
+  // Guarding the source, not just the copy: the ring control is vendored, so a
+  // re-extraction from upstream would reintroduce the gesture silently.
+  for (const token of ["csHolding", "cs-hold", "canHold", "pointerdown"]) {
+    assert.equal(bundle.includes(token), false, `lib/client.js must not contain ${token}`);
+  }
+  assert.doesNotMatch(bundle, /长按/, "no copy anywhere may promise a long press");
 });
 
 test("the first button is never gated by confirmFold", () => {

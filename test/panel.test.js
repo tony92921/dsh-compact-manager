@@ -383,7 +383,7 @@ const settingsPosts = () => requests.filter((entry) => entry.body?.action === "s
 
 test("the settings page has no Save button at all", async () => {
   const panel = await mountLoaded({ settlePreview: true });
-  for (const label of ["模型", "触发线", "入境", "折页"]) {
+  for (const label of ["模型", "自动压缩", "机械"]) {
     panel.openTab(label);
     const buttons = findAll(panel.tree, "button").map((button) => textOf(button));
     assert.ok(!buttons.some((text) => /^保存$|保存中/.test(text.trim())),
@@ -393,7 +393,7 @@ test("the settings page has no Save button at all", async () => {
 
 test("flipping a toggle writes the setting without pressing anything", async () => {
   const panel = await mountLoaded({ settlePreview: true });
-  panel.openTab("入境");
+  panel.openTab("机械");
   requests.length = 0;
   panel.toggleByLabel("允许密图");
   await settleSave(panel);
@@ -408,7 +408,7 @@ test("a burst of edits is coalesced into one request", async () => {
   // Dragging a number field fires an onChange per keystroke. One request per event
   // would hammer the Host, which resolves model metadata on every save.
   const panel = await mountLoaded({ settlePreview: true });
-  panel.openTab("入境");
+  panel.openTab("机械");
   requests.length = 0;
   for (let i = 0; i < 5; i += 1) panel.toggleByLabel("允许密图");
   await settleSave(panel);
@@ -419,7 +419,7 @@ test("an edit made during a save is not reverted by that save's response", async
   // The race a Save button never had to face: the Host echoes the config it stored,
   // and adopting that echo after a newer edit would silently undo the edit.
   const panel = await mountLoaded({ settlePreview: true });
-  panel.openTab("入境");
+  panel.openTab("机械");
   requests.length = 0;
   panel.toggleByLabel("允许密图");
   // Fire the first save, then edit again before its response is applied.
@@ -434,7 +434,7 @@ test("an edit made during a save is not reverted by that save's response", async
 
 test("the status line does not claim success while a write is still pending", async () => {
   const panel = await mountLoaded({ settlePreview: true });
-  panel.openTab("入境");
+  panel.openTab("机械");
   panel.toggleByLabel("允许密图");
   // Before the debounce fires, the panel must not say "已自动保存".
   assert.doesNotMatch(panel.text, /已自动保存/, "an unsent edit must not be reported as saved");
@@ -447,7 +447,7 @@ test("a rejected write is shown as an error, not as a saved value", async () => 
   // that rendered identically to success would be invisible — the user would believe
   // a refused config was stored.
   const panel = await mountLoaded({ settlePreview: true });
-  panel.openTab("入境");
+  panel.openTab("机械");
   rejectNextSettings("请选择完整的压缩模型。");
   try {
     panel.toggleByLabel("允许密图");
@@ -470,24 +470,48 @@ test("a rejected write is shown as an error, not as a saved value", async () => 
 
 test("every tab renders without throwing", async () => {
   const panel = await mountLoaded();
-  const labels = ["模型", "触发线", "入境", "折页", "诊断"];
+  const labels = ["模型", "自动压缩", "机械", "诊断"];
   for (const label of labels) {
     assert.doesNotThrow(() => panel.openTab(label), `tab "${label}" must render`);
   }
 });
 
-test("the trigger tab shows the resolved trigger from the Host", async () => {
+test("the fold tab is gone, and its contents survived the move", async () => {
+  // Everything the fold tab held either duplicated the model tab's decisions or was
+  // reference material. A dropped tab must not silently drop the settings inside it.
   const panel = await mountLoaded({ settlePreview: true });
-  panel.openTab("触发线");
+  const tabs = panel.tabs.map((button) => textOf(button).trim());
+  assert.ok(!tabs.includes("折页"), `the fold tab must be removed, got ${tabs.join(", ")}`);
+
+  panel.openTab("机械");
+  assert.match(panel.text, /折页二次确认/, "the confirm toggle must move to the 机械 tab");
+
+  panel.openTab("自动压缩");
+  assert.match(panel.text, /压缩引擎/, "the engine choice leads the 自动压缩 tab");
+
+  panel.openTab("诊断");
+  // The command hint moved here with the toggle and stays. The card sample also
+  // moved here, then was dropped on request: a frozen fake card showed the shape of
+  // a fold but sat between the live counters and the commands, where it read as
+  // stale data. Only the real counts belong on this tab now.
+  assert.ok(!panel.text.includes("折页卡示例"), "the card sample was removed");
+  assert.match(panel.text, /\/fast-compact \[ledger\|saviour\|auto\]/, "the command hint stays");
+});
+
+test("the 自动压缩 tab shows the resolved trigger from the Host", async () => {
+  const panel = await mountLoaded({ settlePreview: true });
+  panel.openTab("自动压缩");
   assert.match(panel.text, /800k/, "the trigger token count must be on screen");
   assert.match(panel.text, /80\.0%/);
   assert.match(panel.text, /保留原文/);
 });
 
-test("the trigger tab exposes all four editable fields", async () => {
+test("the 自动压缩 tab exposes the engine choice plus every editable field", async () => {
   const panel = await mountLoaded({ settlePreview: true });
-  panel.openTab("触发线");
+  panel.openTab("自动压缩");
   const text = panel.text;
+  // The engine choice leads this tab now, so it is part of the contract too.
+  assert.ok(text.includes("压缩引擎"), `the engine row must be rendered; got: ${text.slice(0, 200)}`);
   // The labels are the contract: each row renders a <label> with this text, and the
   // control beside it is either a checkbox (the override switch) or a number input.
   for (const label of ["接管自动压缩阈值", "触发线比例", "预留空间 headroom", "保留原文 retain"]) {
@@ -497,6 +521,54 @@ test("the trigger tab exposes all four editable fields", async () => {
   const checkboxes = inputs.filter((input) => input.props?.type === "checkbox");
   assert.equal(checkboxes.length, 1, "exactly one switch on this pane");
   assert.equal(checkboxes[0].props.checked, true, "the override defaults to on");
+});
+
+test("percentage fields display the stored ratio back in percent", async () => {
+  // The bug this pins: the config stores `thresholdRatio: 0.8`, the field takes a
+  // percentage, and only the write path converted. Typing 60 stored 0.6 and the
+  // next render then showed "0.6" in a field labelled %, which reads as 0.6%.
+  const panel = await mountLoaded({ settlePreview: true });
+  panel.openTab("自动压缩");
+
+  const inputs = findAll(panel.tree, "input").filter((input) => input.props?.type === "number");
+  // The input's own value is a string; compare as such rather than by type.
+  const shown = inputs.map((input) => String(input.props.value));
+  // 0.8 → "80", 0.16 → "16"; the absolute fields pass through untouched.
+  assert.ok(shown.includes("80"), `the trigger ratio must read 80, got ${JSON.stringify(shown)}`);
+  assert.ok(shown.includes("16"), `retain must read 16, got ${JSON.stringify(shown)}`);
+  assert.ok(shown.includes("65536"), `headroom is absolute and must not be scaled, got ${JSON.stringify(shown)}`);
+  for (const value of shown) {
+    assert.equal(value.includes("0.8"), false, `no ratio may leak into the field: ${value}`);
+  }
+});
+
+test("committing the displayed percent stores the ratio again", async () => {
+  // Round-trip stability: 0.8 renders as "80" (previous test), and committing the
+  // displayed "80" must store 0.8 back — not 80, and not 0.8/100. The stub's
+  // useState does not re-render, so the commit is driven from the rendered value
+  // rather than from a simulated keystroke; the conversion under test is the same.
+  const panel = await mountLoaded({ settlePreview: true });
+  panel.openTab("自动压缩");
+
+  const field = findAll(panel.tree, "input")
+    .filter((input) => input.props?.type === "number")
+    .find((input) => String(input.props.value) === "80");
+  assert.ok(field, "the trigger ratio field must be present");
+
+  requests.length = 0;
+  panel.settle();
+  const fresh = findAll(panel.tree, "input")
+    .filter((input) => input.props?.type === "number")
+    .find((input) => String(input.props.value) === "80");
+  assert.ok(fresh, "the trigger ratio field must still be present after settling");
+
+  fresh.props.onBlur();
+  await settleSave(panel);
+
+  const posts = settingsPosts();
+  assert.equal(posts.length, 1, `expected one settings write, got ${posts.length}`);
+  assert.equal(posts[0].body.config.thresholdRatio, 0.8, "the displayed 80% must persist as the ratio 0.8");
+  assert.equal(posts[0].body.config.retainRatio, 0.16, "an untouched ratio must keep its stored value");
 });
 
 test("the diagnostics tab shows both strategy groups", async () => {
@@ -583,8 +655,17 @@ test("both probe buttons exist even when model 2 is unconfigured", async () => {
 });
 
 /** Mount the model tab with a specific `enabled` × `mode` pair from the host. */
-async function mountSwitch(enabled, mode) {
-  stateOverride = { ...STATE, config: { ...STATE.config, enabled, mode } };
+/**
+ * Mount the model tab in a given mode, on the model branch.
+ *
+ * The old signature took an `enabled` flag; that switch is gone, and `enabled` is
+ * now pinned on by `patch`, so only `mode` varies here.
+ */
+async function mountSwitch(mode) {
+  stateOverride = {
+    ...STATE,
+    config: { ...STATE.config, replaceDefault: false, engine: "saviour", enabled: true, mode }
+  };
   try {
     const panel = await mountLoaded({ settlePreview: true });
     panel.openTab("模型");
@@ -594,58 +675,180 @@ async function mountSwitch(enabled, mode) {
   }
 }
 
-test("with the helper off, neither control claims to hand compression to a model", async () => {
-  // This was a real bug: the switch's own hint branched on `mode` and never checked
-  // `enabled`, so "off + direct" rendered two rows contradicting each other — one
-  // saying the model handles automatic compaction, the other saying the official one
-  // does. With the switch off `mode` is never read, so both rows must say so.
-  //
-  // The forbidden pattern is "交给下方" rather than one exact sentence: the point is
-  // the *claim* of delegation, and pinning a full sentence would let a paraphrase of
-  // the same wrong claim pass.
+/** Mount the model tab on the fold branch. */
+async function mountFold(mode = "rescue") {
+  stateOverride = {
+    ...STATE,
+    config: { ...STATE.config, replaceDefault: true, engine: "auto", enabled: true, mode }
+  };
+  try {
+    const panel = await mountLoaded({ settlePreview: true });
+    panel.openTab("模型");
+    return panel;
+  } finally {
+    stateOverride = null;
+  }
+}
+
+test("on the fold branch, no row claims a model handles automatic compaction", async () => {
+  // This used to be the "helper off" case. Now the fold branch is what silences the
+  // model rows, and the bug it guards is the same: a row must not describe a
+  // delegation that `chooseFor` will not perform. The forbidden pattern is the
+  // *claim* ("交给下方"), not one exact sentence.
   for (const mode of ["rescue", "direct"]) {
-    const panel = await mountSwitch(false, mode);
+    const panel = await mountFold(mode);
     assert.doesNotMatch(panel.text, /交给下方/,
-      `off + ${mode}: no row may delegate automatic compaction to a model while the helper is off`);
-    assert.match(panel.text, /此项不生效/, `off + ${mode}: the select must state that it is inactive`);
-    assert.match(panel.text, /自动压缩完全由官方/, `off + ${mode}: the switch must say who handles it`);
+      `fold + ${mode}: no row may delegate automatic compaction to a model on the fold branch`);
+    assert.match(panel.text, /压缩引擎选了「机械」/, `fold + ${mode}: the tab must say why the mode row is absent`);
   }
 });
 
-test("the action select is disabled while the helper is off", async () => {
-  const panel = await mountSwitch(false, "rescue");
-  const selects = findAll(panel.tree, "select").filter((select) =>
-    findAll(select, "option").some((option) => textOf(option).includes("官方优先")));
-  assert.equal(selects.length, 1, "the action select must be identifiable");
-  assert.equal(selects[0].props.disabled, true,
-    "a control whose value is unread must not look editable");
+test("the engine choice writes both fields, so they cannot disagree", async () => {
+  // The duplicate that motivated this: `replaceDefault` (a switch) and `engine` (a
+  // segmented control) both answered "fold or model?", and `chooseFor` reads
+  // `replaceDefault` first. Two stored fields meant they could contradict each
+  // other on screen. One control, one write, both fields.
+  const panel = await mountLoaded({ settlePreview: true });
+  panel.openTab("自动压缩");
+  requests.length = 0;
+  panel.settle();
+
+  // The row is a div whose text starts with the label and contains the buttons.
+  const row = findAll(panel.tree, "div")
+    .filter((node) => textOf(node).includes("压缩引擎"))
+    .sort((a, b) => textOf(a).length - textOf(b).length)[0];
+  assert.ok(row, "the engine row must be on the 自动压缩 tab");
+  const buttons = findAll(row, "button").filter((button) => ["机械", "模型"].includes(textOf(button).trim()));
+  assert.deepEqual(buttons.map((button) => textOf(button).trim()), ["机械", "模型"],
+    "auto is no longer offered as a button");
+
+  // The fixture has replaceDefault:false, engine:"auto" — that reads as 模型.
+  const model = buttons.find((button) => textOf(button).trim() === "模型");
+  assert.equal(model.props["data-active"], "1", "an unset engine with a model configured shows 模型");
+
+  const mechanical = buttons.find((button) => textOf(button).trim() === "机械");
+  mechanical.props.onClick();
+  // The stub cannot schedule a render, and `persist` reads the config from a ref
+  // that only a render refreshes — so re-render before the debounce fires.
+  panel.settle();
+  await settleSave(panel);
+
+  const posts = settingsPosts();
+  assert.equal(posts.length, 1, `expected one settings write, got ${posts.length}`);
+  assert.equal(posts[0].body.config.replaceDefault, true, "机械 must set the hard override");
+  assert.equal(posts[0].body.config.engine, "auto",
+    "机械 leaves engine at auto so auto's no-model fallback still applies");
 });
 
-test("with the helper on, each mode describes its own behaviour", async () => {
-  const direct = await mountSwitch(true, "direct");
-  assert.match(direct.text, /自动压缩直接交给下方备用模型/);
+test("choosing 模型 clears the override instead of leaving it set", async () => {
+  const original = stateOverride;
+  stateOverride = { ...STATE, config: { ...STATE.config, replaceDefault: true } };
+  try {
+    const panel = await mountLoaded({ settlePreview: true });
+    panel.openTab("自动压缩");
+    requests.length = 0;
+    panel.settle();
+
+    const row = findAll(panel.tree, "div")
+      .filter((node) => textOf(node).includes("压缩引擎"))
+      .sort((a, b) => textOf(a).length - textOf(b).length)[0];
+    assert.ok(row, "the engine row must be on the 自动压缩 tab");
+    const buttons = findAll(row, "button").filter((button) => ["机械", "模型"].includes(textOf(button).trim()));
+    const mechanical = buttons.find((button) => textOf(button).trim() === "机械");
+    assert.equal(mechanical.props["data-active"], "1", "replaceDefault:true reads as 机械");
+
+    const model = buttons.find((button) => textOf(button).trim() === "模型");
+    model.props.onClick();
+    panel.settle();
+    await settleSave(panel);
+
+    const posts = settingsPosts();
+    assert.equal(posts.at(-1).body.config.replaceDefault, false, "the override must be cleared");
+    assert.equal(posts.at(-1).body.config.engine, "saviour", "and the engine must say model");
+  } finally {
+    stateOverride = original;
+  }
+});
+
+test("on the fold branch the mode row is absent, not merely greyed out", async () => {
+  // The mode select is unread on the fold branch. Greying it left a row for a
+  // decision that cannot be made; it is now not rendered at all.
+  const original = stateOverride;
+  stateOverride = { ...STATE, config: { ...STATE.config, replaceDefault: true, engine: "auto" } };
+  try {
+    const panel = await mountLoaded({ settlePreview: true });
+    panel.openTab("模型");
+    const modeSelects = findAll(panel.tree, "select").filter((select) =>
+      findAll(select, "option").some((option) => textOf(option).includes("官方优先")));
+    assert.equal(modeSelects.length, 0, "the mode select must not be rendered on the fold branch");
+    assert.doesNotMatch(panel.text, /压缩方式/, "and its label must be gone too");
+    assert.match(panel.text, /压缩引擎选了「机械」/, "the tab must say why it is missing");
+  } finally {
+    stateOverride = original;
+  }
+});
+
+test("on the model branch the mode row is back and editable", async () => {
+  const panel = await mountSwitch("rescue");
+  const selects = findAll(panel.tree, "select").filter((select) =>
+    findAll(select, "option").some((option) => textOf(option).includes("官方优先")));
+  assert.equal(selects.length, 1, "the mode select must be identifiable");
+  assert.notEqual(selects[0].props.disabled, true, "a live control must look editable");
+  assert.match(panel.text, /压缩方式/);
+});
+
+test("with the engine on 模型, each mode describes its own behaviour", async () => {
+  const direct = await mountSwitch("direct");
+  assert.match(direct.text, /自动压缩直接用备用模型 1/);
   assert.match(direct.text, /官方摘要器不参与/);
   assert.doesNotMatch(direct.text, /救援前官方失败次数/, "the rescue count is meaningless in direct mode");
 
-  const rescue = await mountSwitch(true, "rescue");
+  const rescue = await mountSwitch("rescue");
   assert.match(rescue.text, /自动压缩先由官方处理/);
   assert.match(rescue.text, /救援前官方失败次数/, "rescue mode must expose the failure threshold");
 });
 
-test("non-model compaction is available on the model tab, under the two switches", async () => {
-  // It used to sit at the bottom of the tab after the live probe, which read as a
-  // probe option. It is an automatic-path override, so it belongs with the others —
-  // below `压缩方式` (and its rescue count) but above the connectivity probe.
-  const panel = await mountSwitch(true, "rescue");
+test("the 自动压缩 tab comes first and opens by default", async () => {
+  // The engine choice lives there, and it determines whether the other tabs'
+  // settings can have any effect — so it has to be readable before them.
+  const panel = await mountLoaded({ settlePreview: true });
+  const tabs = panel.tabs.map((button) => textOf(button).trim());
+  assert.deepEqual(tabs, ["自动压缩", "模型", "机械", "诊断"], "自动压缩 must be the first tab");
+  // No openTab() call: this is the tab the panel picks on its own.
+  assert.match(panel.text, /压缩引擎/, "the 自动压缩 tab must be the one shown initially");
+});
+
+test("the old helper switch is gone", async () => {
+  const panel = await mountLoaded({ settlePreview: true });
+  for (const label of ["自动压缩", "模型"]) {
+    panel.openTab(label);
+    assert.doesNotMatch(panel.text, /启用自动压缩辅助/,
+      `tab ${label}: the switch was redundant, it only removed the official-only state`);
+  }
+});
+
+test("the model tab reads mode → rescue count → probe", async () => {
+  // The order is the argument the tab makes: how the model branch behaves, then what
+  // the rescue threshold is. The engine choice moved to the 自动压缩 tab (it decides
+  // whether these rows apply at all) and the fold confirm moved to the 机械 tab (it
+  // guards a ledger control, not a model one).
+  const panel = await mountSwitch("rescue");
   const text = panel.text;
-  const helper = text.indexOf("启用自动压缩辅助");
   const mode = text.indexOf("压缩方式");
   const rescueCount = text.indexOf("救援前官方失败次数");
-  const fold = text.indexOf("使能非模型压缩");
+  const confirm = text.indexOf("折页二次确认");
   const probe = text.indexOf("连通性测试");
-  assert.ok([helper, mode, rescueCount, fold, probe].every((at) => at !== -1), "all five rows must render");
-  assert.ok(mode > helper, "the mode select follows the switch it depends on");
+  assert.ok([mode, rescueCount, probe].every((at) => at !== -1), "all three rows must render");
   assert.ok(rescueCount > mode, "the rescue count follows the mode select it belongs to");
-  assert.ok(fold > rescueCount, "non-model compaction follows the mode group");
-  assert.ok(fold < probe, "non-model compaction must not sit past the connectivity probe");
+  assert.equal(confirm, -1, "the fold confirm must not be on the model tab any more");
+  assert.ok(rescueCount < probe, "the probe follows the model settings");
+});
+
+test("the fold confirm lives on the 机械 tab", async () => {
+  // It guards 手动机械压缩, which is a ledger control. It sat on the model tab only
+  // because the removed fold tab used to hold it.
+  const panel = await mountLoaded({ settlePreview: true });
+  panel.openTab("机械");
+  assert.match(panel.text, /折页二次确认/, "the confirm toggle must be on the 机械 tab");
+  assert.match(panel.text, /入境定形/, "alongside the other mechanical settings");
 });

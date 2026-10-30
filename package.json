@@ -1,7 +1,7 @@
 {
   "name": "dsh-compact-manager",
   "version": "1.0.0",
-  "description": "上下文压缩中继：独立压缩模型 + 本地机械折页，合并自 dsh-compact-saviour 与 dsh-ledger-compact",
+  "description": "接管上下文压缩：手动与自动压缩均支持模型压缩和机械折页压缩。模型压缩支持备用模型兜底或直接使用备用模型；机械折页压缩速度快、不消耗 token、可溯洄，算法取自 dsh-ledger-compact。",
   "license": "MIT",
   "author": "tony92921",
   "repository": {

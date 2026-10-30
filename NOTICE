@@ -1,8 +1,8 @@
 # Third-party notices
 
-This package is a merge of two MIT-licensed plugins and vendored parts of one of
-them. The original copyright notices are reproduced here because their code is
-included, in whole or in part, in the shipped bundle.
+This package derives code from the MIT-licensed projects below. Their original
+copyright notices are reproduced here because their code is included, in whole
+or in part, in the shipped bundle.
 
 ## dsh-compact-saviour 0.2.8
 
@@ -34,7 +34,7 @@ MIT License — https://github.com/deepseek-ai/deepseek-harness
 
 The transactional region replacement in `lib/compact-core.js`
 (`compactSurfaceRegion` and the helpers it calls) is dsh-compact-saviour's
-adaptation of that package. It is carried through the merge because the merged
+adaptation of that package. It is carried through unchanged because the
 controller must produce the exact same compaction marker triple, surface op and
 stability checks as the official engine — a reimplementation would drift.
 

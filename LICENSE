@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 tony92921 — dsh-compact-manager: the merge, the controller,
+Copyright (c) 2026 tony92921 — dsh-compact-manager: the controller,
 the settings page and the diagnostics
 Copyright (c) 2026 aa2246740 and contributors — dsh-compact-saviour
 Copyright (c) telagod — dsh-ledger-compact
@@ -26,5 +26,5 @@ SOFTWARE.
 
 ---
 
-This project merges two MIT-licensed plugins and vendors parts of them. See
-NOTICE for the file-by-file provenance of each derived piece.
+This project includes code derived from the MIT-licensed projects listed in
+NOTICE, which records the file-by-file provenance of each derived piece.

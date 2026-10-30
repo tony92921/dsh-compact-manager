@@ -1,9 +1,8 @@
-# dsh-compact-manager: one compaction plugin for both strategies.
+# dsh-compact-manager: context compaction, manual and automatic.
 #
-# Replaces dsh-compact-saviour and dsh-ledger-compact. Both wrapped the same
-# @deepseek-ai/dsh-compaction-basic engine, so only one of them could own
-# compactRegion/compactNow at a time. This entry owns all three engine entry
-# points and picks a strategy per call, which is why neither old row is kept.
+# One row owns all three engine entry points (compactRegion, compactIfNeeded,
+# compactNow) and picks a strategy per call, so the model path and the
+# mechanical fold cannot shadow each other.
 #
 # Keep @deepseek-ai/dsh-compaction-basic mounted: this plugin decorates the live
 # engine instance instead of providing its own, so every official transaction

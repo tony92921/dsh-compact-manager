@@ -1,9 +1,9 @@
 /**
- * Tests for the merged compaction path.
+ * Tests for the mechanical compaction path.
  *
  * The unit tests in `ledger.test.js` cover the fold card and the ingress shaper,
  * and `config.test.js` covers the decision table. What none of them exercise is
- * the thing the merge actually builds: a mechanical fold that runs as a real
+ * what the plugin actually builds: a mechanical fold that runs as a real
  * `compactSurfaceRegion` transaction, sharing its marker triple and stability
  * checks with the model path.
  *

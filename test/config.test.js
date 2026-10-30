@@ -1,11 +1,10 @@
 /**
  * Tests for the strategy decision and the settings normalizer.
  *
- * `chooseFor` is the whole point of the merge: two plugins each had a rule for
- * "who compacts this time", and the merged plugin has to express both in one
- * function without silently changing what either user asked for. Every row of the
- * table in `lib/controller.js` is asserted here, including the interactions the
- * two settings sets create when they are combined.
+ * `chooseFor` is the whole point: two settings sets each say something about
+ * "who compacts this time", and one function has to honour both without silently
+ * changing what either says. Every row of the table in `lib/controller.js` is
+ * asserted here, including the interactions the two sets create when combined.
  */
 
 import test from "node:test";

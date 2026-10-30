@@ -6,7 +6,7 @@
  * activation, so a bundle that only parses is not enough: it has to run its
  * `factory`, resolve its `require` calls and survive `apply()` with a stub
  * `ctx`. This harness exercises exactly that, plus the two registration points
- * the merge added.
+ * this plugin adds.
  */
 
 import { readFileSync } from "node:fs";

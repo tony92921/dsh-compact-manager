@@ -4,6 +4,15 @@ This package derives code from the MIT-licensed projects below. Their original
 copyright notices are reproduced here because their code is included, in whole
 or in part, in the shipped bundle.
 
+## dsh-compact-manager
+
+Copyright (c) 2026 tony92921
+MIT License — same terms as the LICENSE at the repository root.
+
+This covers the controller, the settings page, the diagnostics, the popup footer
+and the build tooling. The sections below cover code from other projects that is
+included in the shipped package.
+
 ## dsh-compact-saviour 0.2.8
 
 Copyright (c) 2026 aa2246740 and contributors
